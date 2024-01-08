@@ -346,7 +346,7 @@ static int _fill_job_desc_from_opts(slurm_opt_t *opt, job_desc_msg_t *desc)
 		      __func__, opt->export_env);
 		return -1;
 	}
-	if (opt->get_user_env_time >= 0) {
+	if (opt->get_user_env_time > 0) {
 		env_array_overwrite(&desc->environment,
 				    "SLURM_GET_USER_ENV", "1");
 	}

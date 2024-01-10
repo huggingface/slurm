@@ -167,6 +167,7 @@ extern char *run_command(run_command_args_t *args)
 	pid_t cpid;
 	char *resp = NULL;
 	int pfd[2] = { -1, -1 };
+    bool reaped = false;
 
 	if ((args->script_path == NULL) || (args->script_path[0] == '\0')) {
 		error("%s: no script specified", __func__);
@@ -297,6 +298,20 @@ extern char *run_command(run_command_args_t *args)
 			}
 			i = poll(&fds, 1, new_wait);
 			if (i == 0) {
+			     /*
+			     * If the process finished but its stdout file
+                 * descriptor is still open somehow (for
+                 * example, if the script spawned a child
+                 * process), then poll() will return 0.
+                 * Try to reap the script process right now; if
+                 * the script is done, then just exit and kill
+                 * the process group to avoid being stuck in
+                 * this loop.
+                 */
+                 if (waitpid(cpid, args->status, WNOHANG) > 0) {
+                     reaped = true;
+                     break;
+                 }
 				continue;
 			} else if (i < 0) {
 				error("%s: %s poll:%m",
@@ -327,8 +342,10 @@ extern char *run_command(run_command_args_t *args)
 				}
 			}
 		}
-		/* Kill immediately if the script isn't exiting normally. */
-		if (send_terminate) {
+		if (waitpid(cpid, args->status, WNOHANG) > 0) {
+		    /* Child already reaped, just kill the process group */
+		    _kill_pg(cpid);
+		}else if (send_terminate) {
 			_kill_pg(cpid);
 			waitpid(cpid, args->status, 0);
 		} else {
